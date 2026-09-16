@@ -385,8 +385,13 @@ resource "aws_route_table_association" "applicationtier2" {
 }
 
 # Connect routing table to public subnet
-resource "aws_route_table_association" "public" {
+resource "aws_route_table_association" "public1" {
   subnet_id      = aws_subnet.saxit_subnet_public_1.id
+  route_table_id = aws_route_table.public_route.id
+}
+
+resource "aws_route_table_association" "public2" {
+  subnet_id      = aws_subnet.saxit_subnet_public_2.id
   route_table_id = aws_route_table.public_route.id
 }
 
