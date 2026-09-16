@@ -81,7 +81,7 @@ jobs:
           terraform --version
 
       # Run plan
-      - name: Initialise project and view terraform plan
+      - name: Initialise project and run terraform apply
         run: |
           cd terraform
           terraform fmt
