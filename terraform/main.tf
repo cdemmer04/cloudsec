@@ -34,12 +34,29 @@ resource "aws_vpc" "saxit_vpc" {
 }
 
 ###################################################
-#Create an internetgateway in de VPC
+#Create an internetgateway for the public subnets
 resource "aws_internet_gateway" "saxit_gw" {
   vpc_id = aws_vpc.saxit_vpc.id
 
   tags = {
     Name  = "saxit_gw"
+  }
+}
+
+# Create elastic ip for nat gateway
+resource "aws_eip" "saxit_nat_gw_eip" {
+  tags = {
+    Name = "saxit_nat_gw_eip"
+  }
+}
+
+# Create a NAT gateway for the presentation and application tiers
+resource "aws_nat_gateway" "saxit_nat_gw" {
+  connectivity_type = "public"
+  subnet_id = aws_subnet.saxit_subnet_public.id
+  allocation_id = aws_eip.saxit_nat_gw_eip.id
+  tags = {
+    Name = "saxit_nat_gw"
   }
 }
 
@@ -52,19 +69,31 @@ resource "aws_vpc_peering_connection" "dbpeer" {
 }
 
 ###################################################
-# Create routing table for presentationtier
-resource "aws_route_table" "pres-route" {
+# Create routing table for public subnets
+resource "aws_route_table" "public-route" {
   vpc_id = aws_vpc.saxit_vpc.id
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.saxit_gw.id # 
+    gateway_id = aws_internet_gateway.saxit_gw.id 
+  }
+   tags = {
+    Name = "public-route"
+  }
 }
+
+# Create routing table for presentation and application tiers
+resource "aws_route_table" "pres_app_route" {
+  vpc_id = aws_vpc.saxit_vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.saxit_nat_gw.id
+  }
   route {
     cidr_block = "10.1.0.0/16"
     gateway_id = aws_vpc_peering_connection.dbpeer.id
-}
+  }
    tags = {
-    Name = "pres-route"
+    Name = "pres_app_route"
   }
 }
 
@@ -211,17 +240,6 @@ resource "aws_security_group_rule" "applicationtier_sg_ec2_egressall" {
 }
 
 ###################################################
-# Create subnet for bastion host
-resource "aws_subnet" "saxit_bastion_subnet" {
-  vpc_id = aws_vpc.saxit_vpc.id
-  cidr_block = "10.0.99.0/24"
-  map_public_ip_on_launch = true
-  availability_zone = "us-east-1a"
-  tags = {
-    Name = "saxit_subnet_bastion"
-  }
-}
-
 # Create security group for bastion host
 resource "aws_security_group" "bastion_sg" {
   name = "bastion_sg"
@@ -261,8 +279,8 @@ resource "aws_security_group_rule" "bastion_sg_egress22_application" {
 
 # Connect route table to bastion subnet
 resource "aws_route_table_association" "bastion" {
-  subnet_id      = aws_subnet.saxit_bastion_subnet.id
-  route_table_id = aws_route_table.pres-route.id
+  subnet_id      = aws_subnet.saxit_subnet_public.id
+  route_table_id = aws_route_table.pres_app_route.id
 }
 
 # Create bastion host EC2
@@ -270,7 +288,7 @@ resource "aws_instance" "bastion" {
   depends_on = [aws_lb.application-lb]
   ami           = "ami-084568db4383264d4" # Amazon Ubuntu Linux 2 AMI
   instance_type = "t2.micro"              # Adjust instance type as needed
-  subnet_id = aws_subnet.saxit_bastion_subnet.id
+  subnet_id = aws_subnet.saxit_subnet_public.id
   associate_public_ip_address = true
   root_block_device {
     volume_type = "gp2"
@@ -284,10 +302,21 @@ resource "aws_instance" "bastion" {
 }
 
 ###################################################
+# Create public subnets in both availability zones
+resource "aws_subnet" "saxit_subnet_public" {
+  vpc_id            = aws_vpc.saxit_vpc.id
+  cidr_block        = "10.0.1.0/24"
+  availability_zone = "us-east-1a"
+  tags = {
+    Name  = "saxit_subnet_public_1"
+  }
+}
+
+###################################################
 #Create different presentationtier subnets spread over 2 different availability zones 
 resource "aws_subnet" "saxit_subnet_presentation_1" {
   vpc_id            = aws_vpc.saxit_vpc.id
-  cidr_block        = "10.0.1.0/24"
+  cidr_block        = "10.0.3.0/24"
   availability_zone = "us-east-1a"
   tags = {
     Name  = "saxit_subnet_presentation_1"
@@ -296,7 +325,7 @@ resource "aws_subnet" "saxit_subnet_presentation_1" {
 
 resource "aws_subnet" "saxit_subnet_presentation_2" {
   vpc_id            = aws_vpc.saxit_vpc.id
-  cidr_block        = "10.0.2.0/24"
+  cidr_block        = "10.0.4.0/24"
   availability_zone = "us-east-1b"
   tags = {
     Name  = "saxit_subnet_presentation_2"
@@ -307,7 +336,7 @@ resource "aws_subnet" "saxit_subnet_presentation_2" {
 #Create different applicationtier subnets spread over 2 different availability zones 
 resource "aws_subnet" "saxit_subnet_appl_1" {
   vpc_id            = aws_vpc.saxit_vpc.id
-  cidr_block        = "10.0.3.0/24"
+  cidr_block        = "10.0.5.0/24"
   availability_zone = "us-east-1a"
 
   tags = {
@@ -317,7 +346,7 @@ resource "aws_subnet" "saxit_subnet_appl_1" {
 
 resource "aws_subnet" "saxit_subnet_appl_2" {
   vpc_id            = aws_vpc.saxit_vpc.id
-  cidr_block        = "10.0.4.0/24"
+  cidr_block        = "10.0.6.0/24"
   availability_zone = "us-east-1b"
 
   tags = {
@@ -329,22 +358,28 @@ resource "aws_subnet" "saxit_subnet_appl_2" {
 #Connect routing table to presentation subnets
 resource "aws_route_table_association" "presentationtier1" {
   subnet_id      = aws_subnet.saxit_subnet_presentation_1.id
-  route_table_id = aws_route_table.pres-route.id
+  route_table_id = aws_route_table.pres_app_route.id
 }
 resource "aws_route_table_association" "presentationtier2" {
   subnet_id      = aws_subnet.saxit_subnet_presentation_2.id
-  route_table_id = aws_route_table.pres-route.id
+  route_table_id = aws_route_table.pres_app_route.id
 }
 
 ###################################################
 #Connect routing table to application subnets
 resource "aws_route_table_association" "applicationtier1" {
   subnet_id      = aws_subnet.saxit_subnet_appl_1.id
-  route_table_id = aws_route_table.pres-route.id
+  route_table_id = aws_route_table.pres_app_route.id
 }
 resource "aws_route_table_association" "applicationtier2" {
   subnet_id      = aws_subnet.saxit_subnet_appl_2.id
-  route_table_id = aws_route_table.pres-route.id
+  route_table_id = aws_route_table.pres_app_route.id
+}
+
+# Connect routing table to public subnet
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.saxit_subnet_public.id
+  route_table_id = aws_route_table.pres_app_route.id
 }
 
 ##################################################
