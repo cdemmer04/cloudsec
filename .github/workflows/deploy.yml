@@ -33,13 +33,10 @@ jobs:
       
       - name: Install Terraform
         run: |
-          # Add hashicorp repository
-          wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-
           # Update apt and install terraform
           sudo apt-get update
-          sudo apt-get install terraform -y
+          sudo apt-get install snapd -y
+          sudo snap install terraform --classic
 
           # Verify installation of terraform
           terraform --version
