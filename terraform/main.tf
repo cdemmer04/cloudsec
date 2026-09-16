@@ -285,7 +285,6 @@ resource "aws_route_table_association" "bastion" {
 
 # Create bastion host EC2
 resource "aws_instance" "bastion" {
-  depends_on = [aws_lb.application-lb]
   ami           = "ami-084568db4383264d4" # Amazon Ubuntu Linux 2 AMI
   instance_type = "t2.micro"              # Adjust instance type as needed
   subnet_id = aws_subnet.saxit_subnet_public.id
@@ -554,7 +553,6 @@ resource "aws_lb_target_group" "presentation-lb-tg" {
     path                = "/"
     unhealthy_threshold = "2"
   }
-  depends_on = [aws_lb.presentation-lb]
 }
 
 # Create listners
@@ -606,7 +604,6 @@ resource "aws_lb_target_group" "application-lb-tg" {
     path                = "/"
     unhealthy_threshold = "2"
   }
-  depends_on = [aws_lb.application-lb]
 }
 # Create listners
 resource "aws_alb_listener" "listener-http-appl" {
