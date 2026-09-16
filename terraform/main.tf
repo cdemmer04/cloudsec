@@ -58,7 +58,7 @@ resource "aws_route_table" "pres-route" {
   vpc_id = aws_vpc.saxit_vpc.id
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.saxit_gw.id # Reference the ID of the internet gateway
+    gateway_id = aws_internet_gateway.saxit_gw.id # 
 }
   route {
     cidr_block = "10.1.0.0/16"
@@ -78,7 +78,7 @@ resource "aws_route" "dbroute" {
 }
 
 ###################################################
-# Create security groups for presentationtier loadbalancer
+# Create security groups for presentationtier loadbalancer. Only allowing ingress from the internet and egress to the presentation tier EC2 instances
 resource "aws_security_group" "presentationtier_sg_lb" {
   name = "presentationtier_sg_lb"
   description = "Allow traffic from internet to presentation tier loadbalancer"
@@ -101,68 +101,94 @@ resource "aws_security_group" "presentationtier_sg_lb" {
   }
 }
 
-# Create security groups for presentationtier ec2
+# Create security groups for presentationtier ec2. Only allowing ingress from bastion host and loadbalancer.
 resource "aws_security_group" "presentationtier_sg_ec2" {
- name        = "presentationtier_sg"
- description = "Allow SSH and HTTP to web servers"
- vpc_id      = aws_vpc.saxit_vpc.id
+  name        = "presentationtier_sg"
+  description = "Allow SSH and HTTP to web servers"
+  vpc_id      = aws_vpc.saxit_vpc.id
 
+# Only allow SSH ingress from bastion host
 ingress {
-   description = "SSH ingress"
-   from_port   = 22
-   to_port     = 22
-   protocol    = "tcp"
-   security_groups = [aws_security_group.bastion_sg.id]
- }
+  description = "SSH ingress"
+  from_port   = 22
+  to_port     = 22
+  protocol    = "tcp"
+  security_groups = [aws_security_group.bastion_sg.id]
+}
+
+# Only allow HTTP ingress from presentation tier loadbalancer
 ingress {
-   description = "HTTP ingress"
-   from_port   = 80
-   to_port     = 80
-   protocol    = "tcp"
-   security_groups = [aws_security_group.presentationtier_sg_lb]
- }
+  description = "HTTP ingress"
+  from_port   = 80
+  to_port     = 80
+  protocol    = "tcp"
+  security_groups = [aws_security_group.presentationtier_sg_lb]
+}
+
+# Allow internet access for now, because of userdata in EC2 instances. In the future of different deployment scnenario, you would restrict outbound access to only the application tier loadbalancer
 egress {
-   from_port   = 0
-   to_port     = 0
-   protocol    = "-1"
-   cidr_blocks = ["0.0.0.0/0"]
+  from_port   = 0
+  to_port     = 0
+  protocol    = "-1"
+  cidr_blocks = ["0.0.0.0/0"]
  }
 }
 
 ###################################################
-# Create security group for applicationtier
-resource "aws_security_group" "applicationtier_sg" {
- name        = "applicationtier_sg"
- description = "Allow SSH 8080 to app servers"
+# Create security group for applicationtier lb. Only allowing ingress from presentation tier EC2.
+resource "aws_security_group" "applicationtier_sg_lb" {
+  name = "applicationtier_sg_lb"
+  description = "Allow HTTP from presentation tier to application tier EC2 instances"
+  vpc_id = aws_vpc.saxit_vpc.id
+
+  # Allow HTTP Ingress on port 8080 from application tier loadbalancer
+  ingress {
+    description = "HTTP ingress"
+    from_port = 8080
+    to_port = 8080
+    security_groups = [aws_security_group.presentationtier_sg_ec2.id]
+  }
+
+  # Allow HTTP Egress on port 8080 to application tier EC2 instances
+  egress {
+    description = "Allow HTTP to application tier EC2"
+    from_port = 8080
+    to_port = 8080
+    security_groups = [aws_security_group.applicationtier_sg_ec2.id]
+  }
+}
+
+# Create security group for applicationtier ec2. Only allowing ingress from application tier loadbalancer and bastion host.
+resource "aws_security_group" "applicationtier_sg_ec2" {
+ name        = "applicationtier_sg_ec2"
+ description = "Allow SSH and HTTP from presentation tier EC2 instances"
  vpc_id      = aws_vpc.saxit_vpc.id
 
-ingress {
-   description = "SSH ingress"
-   from_port   = 22
-   to_port     = 22
-   protocol    = "tcp"
-   security_groups = [aws_security_group.bastion_sg.id]
- }
-ingress {
-   description = "HTTP ingress"
-   from_port   = 80
-   to_port     = 9000
-   protocol    = "tcp"
-   cidr_blocks = ["0.0.0.0/0"]
- }
- ingress {
-  cidr_blocks = ["0.0.0.0/0"]
-  from_port   = 8
-  to_port     = 0
-  protocol    = "icmp"
-  description = "Allow ping"
-}
-egress {
-   from_port   = 0
-   to_port     = 0
-   protocol    = "-1"
-   cidr_blocks = ["0.0.0.0/0"]
- }
+  # Allow SSH only from bastion host
+  ingress {
+    description = "SSH ingress"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    security_groups = [aws_security_group.bastion_sg.id]
+  }
+
+  # Allow HTTP ingress on 8080 from application tier loadbalancer
+  ingress {
+    description = "HTTP ingress"
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    security_groups = [aws_security_group.applicationtier_sg_lb]
+  }
+
+  # Allow internet access for now, because of userdata in EC2 instances. In the future of different deployment scnenario, you would restrict outbound access to only the application tier loadbalancer
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 ###################################################
@@ -183,6 +209,7 @@ resource "aws_security_group" "bastion_sg" {
   description = "Security group for bastion host"
   vpc_id = aws_vpc.saxit_vpc.id
 
+  # Allow ingress from internet
   ingress {
     from_port = 22 
     to_port = 22
@@ -190,13 +217,21 @@ resource "aws_security_group" "bastion_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Allow SSH egress to presentation tier EC2 instances
   egress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    from_port = 22
+    to_port = 22
+    protocol = "TCP"
+    security_groups = [aws_security_group.presentationtier_sg_ec2]
   }
-  
+
+  # Allow SSH egress to application tier EC2 instances
+  egress {
+    from_port = 22
+    to_port = 22
+    protocol = "TCP"
+    security_groups = [aws_security_group.applicationtier_sg_ec2]
+  }
 }
 
 # Connect route table to bastion subnet
@@ -218,7 +253,7 @@ resource "aws_instance" "bastion" {
                     }
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
   key_name = local.sshkey
- tags = {
+  tags = {
      Name = "bastion"
   }
 }
@@ -228,7 +263,6 @@ resource "aws_instance" "bastion" {
 resource "aws_subnet" "saxit_subnet_presentation_1" {
   vpc_id            = aws_vpc.saxit_vpc.id
   cidr_block        = "10.0.1.0/24"
-  map_public_ip_on_launch = true
   availability_zone = "us-east-1a"
   tags = {
     Name  = "saxit_subnet_presentation_1"
@@ -238,7 +272,6 @@ resource "aws_subnet" "saxit_subnet_presentation_1" {
 resource "aws_subnet" "saxit_subnet_presentation_2" {
   vpc_id            = aws_vpc.saxit_vpc.id
   cidr_block        = "10.0.2.0/24"
-  map_public_ip_on_launch = true
   availability_zone = "us-east-1b"
   tags = {
     Name  = "saxit_subnet_presentation_2"
@@ -371,7 +404,7 @@ resource "aws_instance" "app01" {
   ami           = "ami-084568db4383264d4" # Amazon Ubuntu Linux 2 AMI
   instance_type = "t2.micro"              # Adjust instance type as needed
   subnet_id = aws_subnet.saxit_subnet_appl_1.id
-  associate_public_ip_address = true
+  associate_public_ip_address = false
   root_block_device {
     volume_type = "gp2"
     volume_size = 50 # Adjust volume size as needed
@@ -405,7 +438,7 @@ resource "aws_instance" "app02" {
   ami           = "ami-084568db4383264d4" # Amazon Ubuntu Linux 2 AMI
   instance_type = "t2.micro"              # Adjust instance type as needed
   subnet_id = aws_subnet.saxit_subnet_appl_2.id
-  associate_public_ip_address = true
+  associate_public_ip_address = false
   root_block_device {
     volume_type = "gp2"
     volume_size = 50 # Adjust volume size as needed
@@ -435,12 +468,12 @@ vpc_security_group_ids = [aws_security_group.applicationtier_sg.id]
 }
 
 ###################################################
-# Create loadbalancer presentation tier
+# Create loadbalancer presentation tier. Internet-facing
 resource "aws_lb" "presentation-lb" {
   name               = "presentation-lb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.presentationtier_sg.id]
+  security_groups    = [aws_security_group.presentationtier_sg_lb.id]
   subnets            = [aws_subnet.saxit_subnet_presentation_1.id, aws_subnet.saxit_subnet_presentation_2.id]
   enable_deletion_protection = false
 }
@@ -487,10 +520,10 @@ resource "aws_lb_target_group_attachment" "presentation-attach2" {
 }
 
 ###################################################
-# Create loadbalancer appliction tier
+# Create loadbalancer appliction tier. Not internet-facing. Internal access only
 resource "aws_lb" "application-lb" {
   name               = "application-lb"
-  internal           = false
+  internal           = true
   load_balancer_type = "application"
   security_groups    = [aws_security_group.applicationtier_sg.id]
   subnets            = [aws_subnet.saxit_subnet_appl_1.id, aws_subnet.saxit_subnet_appl_2.id]
