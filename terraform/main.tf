@@ -53,7 +53,7 @@ resource "aws_eip" "saxit_nat_gw_eip" {
 # Create a NAT gateway for the presentation and application tiers
 resource "aws_nat_gateway" "saxit_nat_gw" {
   connectivity_type = "public"
-  subnet_id = aws_subnet.saxit_subnet_public.id
+  subnet_id = aws_subnet.saxit_subnet_public_1.id
   allocation_id = aws_eip.saxit_nat_gw_eip.id
   tags = {
     Name = "saxit_nat_gw"
@@ -279,7 +279,7 @@ resource "aws_security_group_rule" "bastion_sg_egress22_application" {
 
 # Connect route table to bastion subnet
 resource "aws_route_table_association" "bastion" {
-  subnet_id      = aws_subnet.saxit_subnet_public.id
+  subnet_id      = aws_subnet.saxit_subnet_public_1.id
   route_table_id = aws_route_table.pres_app_route.id
 }
 
@@ -287,7 +287,7 @@ resource "aws_route_table_association" "bastion" {
 resource "aws_instance" "bastion" {
   ami           = "ami-084568db4383264d4" # Amazon Ubuntu Linux 2 AMI
   instance_type = "t2.micro"              # Adjust instance type as needed
-  subnet_id = aws_subnet.saxit_subnet_public.id
+  subnet_id = aws_subnet.saxit_subnet_public_1.id
   associate_public_ip_address = true
   root_block_device {
     volume_type = "gp2"
@@ -302,12 +302,21 @@ resource "aws_instance" "bastion" {
 
 ###################################################
 # Create public subnets in both availability zones
-resource "aws_subnet" "saxit_subnet_public" {
+resource "aws_subnet" "saxit_subnet_public_1" {
   vpc_id            = aws_vpc.saxit_vpc.id
   cidr_block        = "10.0.1.0/24"
   availability_zone = "us-east-1a"
   tags = {
     Name  = "saxit_subnet_public_1"
+  }
+}
+
+resource "aws_subnet" "saxit_subnet_public_2" {
+  vpc_id            = aws_vpc.saxit_vpc.id
+  cidr_block        = "10.0.2.0/24"
+  availability_zone = "us-east-1b"
+  tags = {
+    Name  = "saxit_subnet_public_2"
   }
 }
 
@@ -377,7 +386,7 @@ resource "aws_route_table_association" "applicationtier2" {
 
 # Connect routing table to public subnet
 resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.saxit_subnet_public.id
+  subnet_id      = aws_subnet.saxit_subnet_public_1.id
   route_table_id = aws_route_table.public_route.id
 }
 
@@ -533,7 +542,7 @@ resource "aws_lb" "presentation-lb" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.presentationtier_sg_lb.id]
-  subnets            = [aws_subnet.saxit_subnet_presentation_1.id, aws_subnet.saxit_subnet_presentation_2.id]
+  subnets            = [aws_subnet.saxit_subnet_public_1.id, aws_subnet.saxit_subnet_public_2.id]
   enable_deletion_protection = false
 }
 
