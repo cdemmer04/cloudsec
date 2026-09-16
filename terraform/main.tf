@@ -70,14 +70,14 @@ resource "aws_vpc_peering_connection" "dbpeer" {
 
 ###################################################
 # Create routing table for public subnets
-resource "aws_route_table" "public-route" {
+resource "aws_route_table" "public_route" {
   vpc_id = aws_vpc.saxit_vpc.id
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.saxit_gw.id 
   }
    tags = {
-    Name = "public-route"
+    Name = "public_route"
   }
 }
 
@@ -378,7 +378,7 @@ resource "aws_route_table_association" "applicationtier2" {
 # Connect routing table to public subnet
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.saxit_subnet_public.id
-  route_table_id = aws_route_table.pres_app_route.id
+  route_table_id = aws_route_table.public_route.id
 }
 
 ##################################################
