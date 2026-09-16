@@ -83,22 +83,26 @@ resource "aws_security_group" "presentationtier_sg_lb" {
   name = "presentationtier_sg_lb"
   description = "Allow traffic from internet to presentation tier loadbalancer"
   vpc_id = aws_vpc.saxit_vpc.id
+}
 
-  ingress {
-    description = "HTTP Ingress"
-    from_port = 80
-    to_port = 80
-    protocol = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+resource "aws_security_group_rule" "presentationtier_sg_lb_ingress80" {
+  security_group_id = aws_security_group.presentationtier_sg_lb.id
+  description = "HTTP Ingress"
+  type = "ingress"
+  from_port = 80
+  to_port = 80
+  protocol = "tcp"
+  cidr_blocks = ["0.0.0.0/0"] 
+}
 
-  egress {
-    description = "Forward to presentation EC2"
-    from_port = 80
-    to_port = 80
-    protocol = "tcp"
-    security_groups = [aws_security_group.presentationtier_sg_ec2.id]
-  }
+resource "aws_security_group_rule" "presentationtier_sg_lb_egress80" {
+  security_group_id = aws_security_group.presentationtier_sg_lb.id
+  type = "egress"
+  description = "Forward to presentation EC2"
+  from_port = 80
+  to_port = 80
+  protocol = "tcp"
+  source_security_group_id = aws_security_group.presentationtier_sg_ec2.id
 }
 
 # Create security groups for presentationtier ec2. Only allowing ingress from bastion host and loadbalancer.
@@ -107,31 +111,35 @@ resource "aws_security_group" "presentationtier_sg_ec2" {
   description = "Allow SSH and HTTP to web servers"
   vpc_id      = aws_vpc.saxit_vpc.id
 
-# Only allow SSH ingress from bastion host
-ingress {
+}
+
+resource "aws_security_group_rule" "presentationtier_sg_ec2_ingress22" {
+  security_group_id = aws_security_group.presentationtier_sg_ec2.id
+  type = "ingress"
   description = "SSH ingress"
   from_port   = 22
   to_port     = 22
   protocol    = "tcp"
-  security_groups = [aws_security_group.bastion_sg.id]
+  source_security_group_id = aws_security_group.bastion_sg.id
 }
 
-# Only allow HTTP ingress from presentation tier loadbalancer
-ingress {
+resource "aws_security_group_rule" "presentationtier_sg_ec2_ingress80" {
+  security_group_id = aws_security_group.presentationtier_sg_ec2.id
+  type = "ingress"
   description = "HTTP ingress"
   from_port   = 80
   to_port     = 80
   protocol    = "tcp"
-  security_groups = [aws_security_group.presentationtier_sg_lb]
+  source_security_group_id = aws_security_group.presentationtier_sg_lb.id
 }
 
-# Allow internet access for now, because of userdata in EC2 instances. In the future of different deployment scnenario, you would restrict outbound access to only the application tier loadbalancer
-egress {
+resource "aws_security_group_rule" "presentationtier_sg_ec2_egressall" {
+  security_group_id = aws_security_group.presentationtier_sg_ec2.id
+  type = "egress"
   from_port   = 0
   to_port     = 0
   protocol    = "-1"
   cidr_blocks = ["0.0.0.0/0"]
- }
 }
 
 ###################################################
@@ -140,22 +148,28 @@ resource "aws_security_group" "applicationtier_sg_lb" {
   name = "applicationtier_sg_lb"
   description = "Allow HTTP from presentation tier to application tier EC2 instances"
   vpc_id = aws_vpc.saxit_vpc.id
+}
 
-  # Allow HTTP Ingress on port 8080 from application tier loadbalancer
-  ingress {
-    description = "HTTP ingress"
-    from_port = 8080
-    to_port = 8080
-    security_groups = [aws_security_group.presentationtier_sg_ec2.id]
-  }
+# Allow ingress 8080 from application tier lb
+resource "aws_security_group_rule" "applicationtier_sg_lb_ingress8080" {
+  security_group_id = aws_security_group.applicationtier_sg_lb.id
+  type = "ingress"
+  description = "HTTP ingress"
+  from_port = 8080
+  to_port = 8080
+  protocol = "TCP"
+  source_security_group_id = aws_security_group.presentationtier_sg_ec2.id
+}
 
-  # Allow HTTP Egress on port 8080 to application tier EC2 instances
-  egress {
-    description = "Allow HTTP to application tier EC2"
-    from_port = 8080
-    to_port = 8080
-    security_groups = [aws_security_group.applicationtier_sg_ec2.id]
-  }
+# Allow egress 8080 to application tier EC2
+resource "aws_security_group_rule" "applicationtier_sg_lb_egress8080" {
+  security_group_id = aws_security_group.applicationtier_sg_lb.id
+  description = "Allow HTTP to application tier EC2"
+  type = "egress"
+  from_port = 8080
+  to_port = 8080
+  protocol = "TCP"
+  source_security_group_id = aws_security_group.applicationtier_sg_ec2.id
 }
 
 # Create security group for applicationtier ec2. Only allowing ingress from application tier loadbalancer and bastion host.
@@ -163,32 +177,38 @@ resource "aws_security_group" "applicationtier_sg_ec2" {
  name        = "applicationtier_sg_ec2"
  description = "Allow SSH and HTTP from presentation tier EC2 instances"
  vpc_id      = aws_vpc.saxit_vpc.id
+}
 
-  # Allow SSH only from bastion host
-  ingress {
-    description = "SSH ingress"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    security_groups = [aws_security_group.bastion_sg.id]
-  }
+# Allow SSH only from bastion host
+resource "aws_security_group_rule" "applicationtier_sg_ec2_ingress22" {
+  security_group_id = aws_security_group.applicationtier_sg_ec2.id
+  type = "ingress"
+  description = "SSH ingress"
+  from_port   = 22
+  to_port     = 22
+  protocol    = "tcp"
+  source_security_group_id = aws_security_group.bastion_sg.id
+}
 
-  # Allow HTTP ingress on 8080 from application tier loadbalancer
-  ingress {
-    description = "HTTP ingress"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    security_groups = [aws_security_group.applicationtier_sg_lb]
-  }
+# Allow HTTP ingress on 8080 from application tier loadbalancer
+resource "aws_security_group_rule" "applicationtier_sg_ec2_ingress8080" {
+  security_group_id = aws_security_group.applicationtier_sg_ec2.id
+  type = "ingress"
+  description = "HTTP ingress"
+  from_port   = 8080
+  to_port     = 8080
+  protocol    = "tcp"
+  source_security_group_id = aws_security_group.applicationtier_sg_lb.id
+}
 
-  # Allow internet access for now, because of userdata in EC2 instances. In the future of different deployment scnenario, you would restrict outbound access to only the application tier loadbalancer
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+# Allow internet access for now, because of userdata in EC2 instances. In the future of different deployment scnenario, you would restrict outbound access to only the application tier loadbalancer
+resource "aws_security_group_rule" "applicationtier_sg_ec2_egressall" {
+  security_group_id = aws_security_group.applicationtier_sg_ec2.id
+  type = "egress"
+  from_port   = 0
+  to_port     = 0
+  protocol    = "-1"
+  cidr_blocks = ["0.0.0.0/0"]
 }
 
 ###################################################
@@ -208,30 +228,36 @@ resource "aws_security_group" "bastion_sg" {
   name = "bastion_sg"
   description = "Security group for bastion host"
   vpc_id = aws_vpc.saxit_vpc.id
+}
 
-  # Allow ingress from internet
-  ingress {
-    from_port = 22 
-    to_port = 22
-    protocol = "TCP"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+# Allow ingress from internet
+resource "aws_security_group_rule" "bastion_sg_ingress22" {
+  security_group_id = aws_security_group.bastion_sg.id
+  type = "ingress"
+  from_port = 22 
+  to_port = 22
+  protocol = "TCP"
+  cidr_blocks = ["0.0.0.0/0"]
+}
 
-  # Allow SSH egress to presentation tier EC2 instances
-  egress {
-    from_port = 22
-    to_port = 22
-    protocol = "TCP"
-    security_groups = [aws_security_group.presentationtier_sg_ec2]
-  }
+# Allow SSH egress to presentation tier EC2 instances
+resource "aws_security_group_rule" "bastion_sg_egress22_presentation" {
+  security_group_id = aws_security_group.bastion_sg.id
+  type = "egress"
+  from_port = 22
+  to_port = 22
+  protocol = "TCP"
+  source_security_group_id = aws_security_group.presentationtier_sg_ec2.id
+}
 
-  # Allow SSH egress to application tier EC2 instances
-  egress {
-    from_port = 22
-    to_port = 22
-    protocol = "TCP"
-    security_groups = [aws_security_group.applicationtier_sg_ec2]
-  }
+# Allow SSH egress to application tier EC2 instances
+resource "aws_security_group_rule" "bastion_sg_egress22_application" {
+  security_group_id = aws_security_group.bastion_sg.id
+  type = "egress"
+  from_port = 22
+  to_port = 22
+  protocol = "TCP"
+  source_security_group_id = aws_security_group.applicationtier_sg_ec2.id
 }
 
 # Connect route table to bastion subnet
@@ -409,7 +435,7 @@ resource "aws_instance" "app01" {
     volume_type = "gp2"
     volume_size = 50 # Adjust volume size as needed
                     }
-vpc_security_group_ids = [aws_security_group.applicationtier_sg.id]		
+vpc_security_group_ids = [aws_security_group.applicationtier_sg_ec2.id]		
  user_data = <<-EOF
   #!/bin/bash
   sudo apt update -y
@@ -443,7 +469,7 @@ resource "aws_instance" "app02" {
     volume_type = "gp2"
     volume_size = 50 # Adjust volume size as needed
                     }
-vpc_security_group_ids = [aws_security_group.applicationtier_sg.id]				
+vpc_security_group_ids = [aws_security_group.applicationtier_sg_ec2.id]				
  user_data = <<-EOF
   #!/bin/bash
   sudo apt update -y
@@ -525,10 +551,11 @@ resource "aws_lb" "application-lb" {
   name               = "application-lb"
   internal           = true
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.applicationtier_sg.id]
+  security_groups    = [aws_security_group.applicationtier_sg_lb.id]
   subnets            = [aws_subnet.saxit_subnet_appl_1.id, aws_subnet.saxit_subnet_appl_2.id]
   enable_deletion_protection = false
  }
+ 
 # Create targetgroup
 resource "aws_lb_target_group" "application-lb-tg" {
   name        = "application-lb-tg"
