@@ -78,8 +78,31 @@ resource "aws_route" "dbroute" {
 }
 
 ###################################################
-# Create security group for presentationtier
-resource "aws_security_group" "presentationtier_sg" {
+# Create security groups for presentationtier loadbalancer
+resource "aws_security_group" "presentationtier_sg_lb" {
+  name = "presentationtier_sg_lb"
+  description = "Allow traffic from internet to presentation tier loadbalancer"
+  vpc_id = aws_vpc.saxit_vpc.id
+
+  ingress {
+    description = "HTTP Ingress"
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "Forward to presentation EC2"
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+    security_groups = [aws_security_group.presentationtier_sg_ec2.id]
+  }
+}
+
+# Create security groups for presentationtier ec2
+resource "aws_security_group" "presentationtier_sg_ec2" {
  name        = "presentationtier_sg"
  description = "Allow SSH and HTTP to web servers"
  vpc_id      = aws_vpc.saxit_vpc.id
@@ -96,15 +119,8 @@ ingress {
    from_port   = 80
    to_port     = 80
    protocol    = "tcp"
-   cidr_blocks = ["0.0.0.0/0"]
+   security_groups = [aws_security_group.presentationtier_sg_lb]
  }
- ingress {
-  cidr_blocks = ["0.0.0.0/0"]
-  from_port   = 8
-  to_port     = 0
-  protocol    = "icmp"
-  description = "Allow ping"
-}
 egress {
    from_port   = 0
    to_port     = 0
@@ -283,12 +299,12 @@ resource "aws_instance" "web01" {
   ami           = "ami-084568db4383264d4" # Amazon Ubuntu Linux 2 AMI
   instance_type = "t2.micro"              # Adjust instance type as needed
   subnet_id = aws_subnet.saxit_subnet_presentation_1.id
-  associate_public_ip_address = true
+  associate_public_ip_address = false
   root_block_device {
     volume_type = "gp2"
     volume_size = 50 # Adjust volume size as needed
                     }
-  vpc_security_group_ids = [aws_security_group.presentationtier_sg.id]
+  vpc_security_group_ids = [aws_security_group.presentationtier_sg_ec2.id]
  user_data = <<-EOF
   #!/bin/bash
   sudo apt update -y
@@ -320,12 +336,12 @@ resource "aws_instance" "web02" {
   ami           = "ami-084568db4383264d4" # Amazon Ubuntu Linux 2 AMI
   instance_type = "t2.micro"              # Adjust instance type as needed
   subnet_id = aws_subnet.saxit_subnet_presentation_2.id
-  associate_public_ip_address = true
+  associate_public_ip_address = false
   root_block_device {
     volume_type = "gp2"
     volume_size = 50 # Adjust volume size as needed
                     }
-  vpc_security_group_ids = [aws_security_group.presentationtier_sg.id]
+  vpc_security_group_ids = [aws_security_group.presentationtier_sg_ec2.id]
  user_data = <<-EOF
  #!/bin/bash
   sudo apt update -y
