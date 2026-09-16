@@ -277,12 +277,6 @@ resource "aws_security_group_rule" "bastion_sg_egress22_application" {
   source_security_group_id = aws_security_group.applicationtier_sg_ec2.id
 }
 
-# Connect route table to bastion subnet
-resource "aws_route_table_association" "bastion" {
-  subnet_id      = aws_subnet.saxit_subnet_public_1.id
-  route_table_id = aws_route_table.pres_app_route.id
-}
-
 # Create bastion host EC2
 resource "aws_instance" "bastion" {
   ami           = "ami-084568db4383264d4" # Amazon Ubuntu Linux 2 AMI
