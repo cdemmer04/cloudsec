@@ -15,7 +15,6 @@ terraform {
 
 provider "aws" {
   region  = "us-east-1"
-  profile = "846546320392"
 }
 ###################################################
 
@@ -107,7 +106,7 @@ resource "aws_security_group_rule" "presentationtier_sg_lb_egress80" {
 
 # Create security groups for presentationtier ec2. Only allowing ingress from bastion host and loadbalancer.
 resource "aws_security_group" "presentationtier_sg_ec2" {
-  name        = "presentationtier_sg"
+  name        = "presentationtier_sg_ec2"
   description = "Allow SSH and HTTP to web servers"
   vpc_id      = aws_vpc.saxit_vpc.id
 
