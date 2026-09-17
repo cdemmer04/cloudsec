@@ -186,7 +186,7 @@ resource "aws_security_group_rule" "applicationtier_sg_lb_ingress8080" {
   from_port = 8080
   to_port = 8080
   protocol = "TCP"
-  source_security_group_id = aws_security_group.presentationtier_sg_ec2.id
+  cidr_blocks = ["0.0.0.0/0"]
 }
 
 # Allow egress 8080 to application tier EC2
@@ -589,7 +589,7 @@ resource "aws_lb_target_group_attachment" "presentation-attach2" {
 # Create loadbalancer appliction tier. Not internet-facing. Internal access only
 resource "aws_lb" "application-lb" {
   name               = "application-lb"
-  internal           = true
+  internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.applicationtier_sg_lb.id]
   subnets            = [aws_subnet.saxit_subnet_appl_1.id, aws_subnet.saxit_subnet_appl_2.id]
