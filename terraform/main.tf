@@ -592,7 +592,7 @@ resource "aws_lb" "application-lb" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.applicationtier_sg_lb.id]
-  subnets            = [aws_subnet.saxit_subnet_appl_1.id, aws_subnet.saxit_subnet_appl_2.id]
+  subnets            = [aws_subnet.saxit_subnet_public_1.id, aws_subnet.saxit_subnet_public_2.id]
   enable_deletion_protection = false
  }
  
